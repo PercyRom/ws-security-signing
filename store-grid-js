@@ -1,0 +1,132 @@
+
+Ext.override(Ext.scroll.Scroller, {
+    scrollIntoView: function(el, hscroll, animate, highlight) {
+        var me = this,
+            position = me.getPosition(),
+            newPosition;
+        if (el) {
+            newPosition = me.getScrollIntoViewXY(el, hscroll);
+            if (newPosition.y !== position.y || newPosition.x !== position.x) {
+                if (highlight) {
+                    me.on({
+                        scrollend: 'doHighlight',
+                        scope: me,
+                        single: true,
+                        args: [
+                            el,
+                            highlight
+                        ]
+                    });
+                }
+                // Disabled this, but not sure what effect this is going to have.
+                // This prevents the grid from scrolling the cell you are editing to the far right of the screen
+                // me.doScrollTo(newPosition.x, newPosition.y, animate); me.doScrollTo(newPosition.x, newPosition.y, animate);
+            }
+            else if (highlight) {
+                me.doHighlight(el, highlight);
+            }
+        }
+    }
+});
+
+
+
+
+
+var stExpFacturacion = Ext.getStore('stExpFacturacion');
+
+var reader = new FileReader();
+        reader.readAsArrayBuffer(filefield.fileInputEl.dom.files[0]);
+
+        reader.onload = function(e) {
+
+
+
+            var data = new Uint8Array(reader.result);
+            var wb = XLSX.read(data,{type:'array'});
+
+            var ws = wb.Sheets[wb.SheetNames[0]];
+
+            var json_data = XLSX.utils.sheet_to_json(ws);
+
+            var price_ambiente_LIMA = 7.93;
+            var price_ambiente_PROV = 33.32;
+
+            var price_congelado_LIMA = 20.83;
+            var price_congelado_PROV = 58.31;
+
+            var price_refrigerado = 0.00;
+
+            for (var index in json_data) {
+
+                json_data[index].hawb = json_data[index].guia;
+                delete json_data[index].guia;
+
+                json_data[index].mawb = json_data[index].mguia;
+                delete json_data[index].mguia;
+
+                json_data[index].pick_up_date = json_data[index].recol;
+                delete json_data[index].recol;
+
+                json_data[index].laboratory = json_data[index].cnee;
+                delete json_data[index].cnee;
+
+                json_data[index].airport_code_rem = 'LIM';
+
+                json_data[index].name_remitter = json_data[index].remitente;
+                delete json_data[index].remitente;
+
+                json_data[index].city_remitter = json_data[index].c_remitente;
+                delete json_data[index].c_remitente;
+
+                json_data[index].state_remitter = json_data[index].city_remitter;
+
+                json_data[index].country_remitter = json_data[index].pais;
+                delete json_data[index].pais;
+
+                json_data[index].country_customer = 'EEUU';
+
+                json_data[index].qty_of_volumens = 1;
+
+                json_data[index].gross = 1;
+
+                json_data[index].gbase_up_to_kg = price_ambiente_LIMA;
+
+                json_data[index].gadd_per_kg = 0.00;
+
+                json_data[index].gfin_semana = 0.00;
+
+                var city = Ext.String.trim(json_data[index].city_remitter).toUpperCase();
+                var gross = json_data[index].gross;
+
+                if(gross === 1 && city === 'LIMA'){
+                    json_data[index].gbase_up_to_kg = (price_ambiente_LIMA);
+
+                }else if(gross === 1 && city !== 'LIMA'){
+                    json_data[index].gbase_up_to_kg = (price_ambiente_PROV);
+                }
+
+                json_data[index].gcharge = (json_data[index].gbase_up_to_kg + json_data[index].gadd_per_kg + json_data[index].gfin_semana);
+
+
+                json_data[index].billing = 1;
+
+                //stExpFacturacion.add(json_data[index]);
+
+            }
+
+                //stExpFacturacion.add({data:{}});
+
+                stExpFacturacion.getProxy().data = {'data' : json_data};
+                stExpFacturacion.setGroupField('mawb');
+                stExpFacturacion.load();
+
+
+
+
+    };
+
+
+
+
+
