@@ -14,7 +14,11 @@ Ext.define('Aldem.controller.CFacturacion', {
         txtContents: '#txtContents',
         txtPais: '#txtPais',
         exp_upload_excel: '#exp_upload_excel',
-        expGpFacturacion: '#ExpGpFacturacion'
+        expGpFacturacion: '#ExpGpFacturacion',
+        txtExpFreight: '#txtExpFreight',
+        txtExpHandling: '#txtExpHandling',
+        txtExpGOperativos: '#txtExpGOperativos',
+        txtExpType: '#txtExpType'
     },
 
     control: {
@@ -67,6 +71,12 @@ Ext.define('Aldem.controller.CFacturacion', {
         },
         "#exp_billing": {
             specialkey: 'onExp_billingSpecialkey'
+        },
+        "#btnExpConfirmar": {
+            click: 'onBtnExpConfirmarClick'
+        },
+        "#expInvoice": {
+            specialkey: 'onExpInvoiceSpecialkey'
         }
     },
 
@@ -355,6 +365,10 @@ Ext.define('Aldem.controller.CFacturacion', {
         var reader = new FileReader();
         reader.readAsArrayBuffer(filefield.fileInputEl.dom.files[0]);
 
+        var expFreight = this.getTxtExpFreight();
+        var expHandling = this.getTxtExpHandling();
+        var expGOperativos = this.getTxtExpGOperativos();
+
         reader.onload = function(e) {
 
 
@@ -428,6 +442,8 @@ Ext.define('Aldem.controller.CFacturacion', {
 
                 json_data[index].billing = 1;
 
+                json_data[index].bcharge = 0.00;
+
                 json_data[index].type = 'Embalaje Consolidación';
 
                 json_data[index].type_qty = 1;
@@ -456,15 +472,9 @@ Ext.define('Aldem.controller.CFacturacion', {
                 countMawb.push({ mawb : uniqueNames[j] , count_hawbs : countHawb(json_data,uniqueNames[j])});
             }
 
-
-            console.log(countMawb);
-
-
-            var freight  = 145.20;
-            var handling = 23.98;
-            var gastos_ope = 17.60;
-
-
+            var freight  = expFreight.getValue();
+            var handling = expHandling.getValue();
+            var gastos_ope = expGOperativos.getValue();
 
 
             Object.keys(countMawb).forEach(function(item) {
@@ -484,18 +494,25 @@ Ext.define('Aldem.controller.CFacturacion', {
 
             });
 
+
+            for(var el = 0; el< json_data.length; el++){
+
+                 var t_gcharge = json_data[el].gcharge;
+                 var t_bcharge = json_data[el].bcharge;
+                 var t_type_charge = json_data[el].type_charge;
+                 var t_freight_mawb = json_data[el].freight_mawb;
+                 var t_handling = json_data[el].handling;
+                 var t_gastos_ope = json_data[el].gastos_ope;
+
+                 json_data[el].total  = t_gcharge + t_bcharge +t_type_charge +t_freight_mawb + t_handling + t_gastos_ope ;
+
+             }
+
             stExpFacturacion.getProxy().data = {'data' : json_data};
             stExpFacturacion.setGroupField('mawb');
             stExpFacturacion.load();
 
-
         };
-
-
-
-
-
-
     },
 
     onBtnExpVaciarDatosClick: function(button, e, eOpts) {
@@ -520,6 +537,9 @@ Ext.define('Aldem.controller.CFacturacion', {
     onExp_grossSpecialkey: function(field, e, eOpts) {
         if (e.getKey() == e.ENTER) {
 
+
+            var stExpFacturacion = Ext.getStore('stExpFacturacion');
+
             var gross = field.value;
 
             var price_congelado_LIMA = 20.83;
@@ -532,17 +552,21 @@ Ext.define('Aldem.controller.CFacturacion', {
 
             var city = Ext.String.trim(grid.selModel.getCurrentPosition().record.data.city_remitter).toUpperCase();
 
+            var row = grid.selModel.getCurrentPosition().rowIdx;
+
+            record = grid.getStore().getAt(row);
+
             if(gross === 1 && city === 'LIMA'){
-                grid.selModel.getCurrentPosition().record.data.gbase_up_to_kg = price_ambiente_LIMA;
+                record.set('gbase_up_to_kg',price_ambiente_LIMA);
 
             }else if(gross === 1 && city !== 'LIMA'){
-                grid.selModel.getCurrentPosition().record.data.gbase_up_to_kg = price_ambiente_PROV;
+                record.set('gbase_up_to_kg',price_ambiente_PROV);
 
             }else if(gross === 5 && city === 'LIMA'){
-                grid.selModel.getCurrentPosition().record.data.gbase_up_to_kg = price_congelado_LIMA;
+                record.set('gbase_up_to_kg',price_congelado_LIMA);
 
             }else if(gross === 5 && city !== 'LIMA'){
-                grid.selModel.getCurrentPosition().record.data.gbase_up_to_kg = price_congelado_PROV;
+                record.set('gbase_up_to_kg',price_congelado_PROV);
 
             }
 
@@ -550,16 +574,53 @@ Ext.define('Aldem.controller.CFacturacion', {
             var add_per = grid.selModel.getCurrentPosition().record.data.gadd_per_kg;
             var fin_sem = grid.selModel.getCurrentPosition().record.data.gfin_semana;
 
-            grid.selModel.getCurrentPosition().record.data.gcharge = (base_up + add_per + fin_sem);
+            record.set('gcharge',(base_up + add_per + fin_sem));
 
-            var row = grid.selModel.getCurrentPosition().rowIdx;
+            if(gross === 1){
 
-            record = grid.getStore().getAt(row);
-            record.set('gross', field.value);
-            record.set('type', Ext.emptyString);
-            record.set('type_qty', 0);
-            record.set('type_charge', 0);
-            record.commit();
+                record.set('type', 'Embalaje Consolidación');
+                record.set('type_qty', 1);
+
+            }else{
+                record.set('type', Ext.emptyString);
+                record.set('type_qty', 0);
+            }
+
+
+            var xmawb =  grid.selModel.getCurrentPosition().record.data.mawb;
+            var item = 0;
+            grid.getStore().each(function(record){
+                if(Ext.String.trim(record.data.mawb) === xmawb && record.data.gross !== 5 ){
+                    item++;
+                }
+            });
+
+            var type = this.getTxtExpType().getValue();
+
+            var xtype_charge = (type / item);
+
+            grid.getStore().each(function(record){
+
+                if(Ext.String.trim(record.data.mawb) === xmawb && record.data.gross !== 5){
+                    record.set('type_charge', xtype_charge);
+                }
+                else if(Ext.String.trim(record.data.mawb) === xmawb && record.data.gross === 5){
+                    record.set('type_charge', 0.00);
+                }
+            });
+
+
+            var t_gcharge = record.data.gcharge;
+            var t_bcharge = record.data.bcharge;
+            var t_type_charge = record.data.type_charge;
+            var t_freight_mawb = record.data.freight_mawb;
+            var t_handling = record.data.handling;
+            var t_gastos_ope = record.data.gastos_ope;
+
+            var total  = t_gcharge + t_bcharge + t_type_charge + t_freight_mawb + t_handling + t_gastos_ope ;
+
+            record.set('total', total);
+
 
             grid.ensureVisible(row,{select:true, highlight:true});
 
@@ -608,40 +669,112 @@ Ext.define('Aldem.controller.CFacturacion', {
 
             var city = Ext.String.trim(grid.selModel.getCurrentPosition().record.data.city_remitter).toUpperCase();
 
+            var row = grid.selModel.getCurrentPosition().rowIdx;
+
+            record = grid.getStore().getAt(row);
+
             if(billing === 5 && city === 'LIMA'){
-                grid.selModel.getCurrentPosition().record.data.bbase_up_to_kg = (price_congelado_LIMA * 5 );
-                grid.selModel.getCurrentPosition().record.data.badd_per_kg = 0.00;
+                record.set('bbase_up_to_kg', price_congelado_LIMA * 5);
+                record.set('badd_per_kg',0.00);
 
             }else if(billing === 1 && city === 'LIMA' ){
-                grid.selModel.getCurrentPosition().record.data.bbase_up_to_kg = 0.00;
-                grid.selModel.getCurrentPosition().record.data.badd_per_kg = 0.00;
+                record.set('bbase_up_to_kg', 0.00);
+                record.set('badd_per_kg',0.00);
 
             }else if(billing === 1 && city !== 'LIMA' ){
-                grid.selModel.getCurrentPosition().record.data.bbase_up_to_kg = 0.00;
-                grid.selModel.getCurrentPosition().record.data.badd_per_kg = 0.00;
+                record.set('bbase_up_to_kg', 0.00);
+                record.set('badd_per_kg',0.00);
+
 
             }else if(billing === 12 && city !== 'LIMA' ){
-                grid.selModel.getCurrentPosition().record.data.bbase_up_to_kg = (price_congelado_PROV * 5 );
-                grid.selModel.getCurrentPosition().record.data.badd_per_kg    = (price_congelado_PROV * 7 );
+                record.set('bbase_up_to_kg', price_congelado_PROV * 5);
+                record.set('badd_per_kg',price_congelado_PROV * 7);
 
             }else{
-                grid.selModel.getCurrentPosition().record.data.bbase_up_to_kg = 0.00;
-                grid.selModel.getCurrentPosition().record.data.badd_per_kg = 0.00;
+                record.set('bbase_up_to_kg', 0.00);
+                record.set('badd_per_kg',0.00);
 
             }
 
             var base_up = grid.selModel.getCurrentPosition().record.data.bbase_up_to_kg;
             var add_per = grid.selModel.getCurrentPosition().record.data.badd_per_kg;
 
-            grid.selModel.getCurrentPosition().record.data.bcharge = (base_up + add_per);
+            record.set('bcharge', base_up + add_per);
 
-            var row = grid.selModel.getCurrentPosition().rowIdx;
+            var t_gcharge = record.data.gcharge;
+            var t_bcharge = record.data.bcharge;
+            var t_type_charge = record.data.type_charge;
+            var t_freight_mawb = record.data.freight_mawb;
+            var t_handling = record.data.handling;
+            var t_gastos_ope = record.data.gastos_ope;
 
-            record = grid.getStore().getAt(row);
-            record.set('gross', field.value);
-            record.commit();
+            var total  = t_gcharge + t_bcharge + t_type_charge + t_freight_mawb + t_handling + t_gastos_ope ;
+
+            record.set('total', total);
 
             grid.ensureVisible(row,{select:true, highlight:true});
+        }
+    },
+
+    /* Pendiente el metodo, UTIL. */
+    onBtnExpConfirmarClick: function(button, e, eOpts) {
+        if(button.getText()  === 'Bloquear'){
+
+            button.setText('Desbloquear');
+
+            this.getTxtExpFreight().labelEl.setOpacity(0.7);
+            this.getTxtExpHandling().labelEl.setOpacity(0.7);
+            this.getTxtExpGOperativos().labelEl.setOpacity(0.7);
+            this.getTxtExpType().labelEl.setOpacity(0.7);
+
+            this.getTxtExpFreight().setReadOnly(true);
+            this.getTxtExpHandling().setReadOnly(true);
+            this.getTxtExpGOperativos().setReadOnly(true);
+            this.getTxtExpType().setReadOnly(true);
+
+            this.getTxtExpFreight().setFieldStyle('background-color: #F2F2F2; background-image: none;');
+            this.getTxtExpHandling().setFieldStyle('background-color: #F2F2F2; background-image: none;');
+            this.getTxtExpGOperativos().setFieldStyle('background-color: #F2F2F2; background-image: none;');
+            this.getTxtExpType().setFieldStyle('background-color: #F2F2F2; background-image: none;');
+
+        }else{
+
+            button.setText('Bloquear');
+
+            this.getTxtExpFreight().labelEl.setOpacity(1);
+            this.getTxtExpHandling().labelEl.setOpacity(1);
+            this.getTxtExpGOperativos().labelEl.setOpacity(1);
+            this.getTxtExpType().labelEl.setOpacity(1);
+
+            this.getTxtExpFreight().setReadOnly(false);
+            this.getTxtExpHandling().setReadOnly(false);
+            this.getTxtExpGOperativos().setReadOnly(false);
+            this.getTxtExpType().setReadOnly(false);
+
+            this.getTxtExpFreight().setFieldStyle('background-color: #FFFFFF;');
+            this.getTxtExpHandling().setFieldStyle('background-color: #FFFFFF; ');
+            this.getTxtExpGOperativos().setFieldStyle('background-color: #FFFFFF;');
+            this.getTxtExpType().setFieldStyle('background-color: #FFFFFF;');
+
+        }
+
+
+    },
+
+    onExpInvoiceSpecialkey: function(field, e, eOpts) {
+        if (e.getKey() == e.ENTER) {
+
+            var grid = this.getExpGpFacturacion();
+
+            var xmawb =  grid.selModel.getCurrentPosition().record.data.mawb;
+
+            grid.getStore().each(function(record){
+
+                if(Ext.String.trim(record.data.mawb) === xmawb){
+                    record.set('invoice', field.getValue());
+                }
+            });
+
         }
     },
 
@@ -672,7 +805,11 @@ Ext.define('Aldem.controller.CFacturacion', {
     },
 
     countHawb: function(jsonObject, mawb) {
-        return jsonObject.filter(function (entry) {return entry.mawb === mawb && entry.gross !== 5 ;}).length;
+        return jsonObject.filter(function (entry) {return entry.mawb === mawb;}).length;
+    },
+
+    countHawb_Gross: function(jsonObject, mawb) {
+        return jsonObject.filter(function (entry) {return entry.mawb === mawb && entry.gross !== 5;}).length;
     }
 
 });
